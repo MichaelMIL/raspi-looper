@@ -187,20 +187,26 @@ class audioloop:
         self.play_just_pressed = False
 
 #defining four audio loops. loops[0] is the master loop.
-loops = (audioloop(), audioloop(), audioloop(), audioloop())
-
+loops = [audioloop() for i in len(RECBUTTONS)]
+print(f'#edited## Created {len(loops)} audio loops')
 #while looping, prev_rec_buffer keeps track of the audio buffer recorded before the current one
 prev_rec_buffer = np.zeros([CHUNK], dtype = np.int16)
 
 #update output volume to prevent mixing distortion due to sample overflow
 def updatevolume():
     global output_volume
+    sum_loops = None
+    for loop in loops:
+        loop = loop.read().astype(np.int32)[:][:]
+        if sum_loops is None:
+            sum_loops = loop
+        else:
+            sum_loops += loop
+
+    print(f'#edited## peak volume')
     peak = np.max(
                   np.abs(
-                          loops[0].audio.astype(np.int32)[:][:]
-                        + loops[1].audio.astype(np.int32)[:][:]
-                        + loops[2].audio.astype(np.int32)[:][:]
-                        + loops[3].audio.astype(np.int32)[:][:]
+                        sum_loops
                         )
                  )
     print('peak = ' + str(peak))
@@ -233,7 +239,7 @@ def set_recording(loop_number = 0):
     #if invalid input, do nothing
     if not loop_number in (1, 2, 3, 4):
         print('invalid loop number passed to set_recording')
-        return;
+        return
     #if chosen track is currently recording flag it
     if loops[loop_number-1].isrecording:
         already_recording = True
@@ -302,13 +308,17 @@ def looping_callback(in_data, frame_count, time_info, status):
                 loop.dub(current_rec_buffer)
             else:
                 loop.add_buffer(current_rec_buffer)
+
+    sum_loops = None
+    for loop in loops:
+        loop = loop.read().astype(np.int32)[:]
+        if sum_loops is None:
+            sum_loops = loop
+        else:
+            sum_loops += loop
+    print(f'#edited## play buffer')
     #add to play_buffer only one-fourth of each audio signal times the output_volume
-    play_buffer[:] = np.multiply((
-                                   loops[0].read().astype(np.int32)[:]
-                                 + loops[1].read().astype(np.int32)[:]
-                                 + loops[2].read().astype(np.int32)[:]
-                                 + loops[3].read().astype(np.int32)[:]
-                                 ), output_volume, out= None, casting = 'unsafe').astype(np.int16)
+    play_buffer[:] = np.multiply(sum_loops, output_volume, out= None, casting = 'unsafe').astype(np.int16)
     #current buffer will serve as previous in next iteration
     prev_rec_buffer = np.copy(current_rec_buffer)
     #play mixed audio and move on to next iteration
